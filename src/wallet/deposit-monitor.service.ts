@@ -21,7 +21,7 @@ export class DepositMonitorService {
     /**
      * Revisa depósitos cada 30 segundos
      */
-    @Cron('*/30 * * * * *')
+    @Cron('*/5 * * * *')
     async checkDeposits() {
         this.logger.log('🔍 Iniciando monitoreo de depósitos...');
 
@@ -59,7 +59,7 @@ export class DepositMonitorService {
         // Obtener transferencias recientes
         const transfers = await this.usdcService.getRecentTransfers(address, {
             direction: 'incoming',
-            blocks: 1000, // ~30 minutos en Polygon
+            blocks: 300, // ~10 minutos en Polygon (reducido para evitar rate limits)
             minConfirmations: 3,
         });
 
