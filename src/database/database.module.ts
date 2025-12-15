@@ -14,6 +14,9 @@ import { User, Transaction, AgentTask } from './entities';
                 entities: [User, Transaction, AgentTask],
                 synchronize: config.get<string>('NODE_ENV') !== 'production',
                 logging: config.get<string>('NODE_ENV') === 'development',
+                ssl: config.get<string>('NODE_ENV') === 'production' ? {
+                    rejectUnauthorized: false,
+                } : false,
             }),
         }),
         TypeOrmModule.forFeature([User, Transaction, AgentTask]),
