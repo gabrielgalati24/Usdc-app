@@ -1,0 +1,11 @@
+export * from './dashboard'
+export * from './login'
+export * from './register'
+export * from './deposit'
+export * from './transfer'
+export * from './withdraw'
+export * from './activity'
+export * from './profile'
+export * from './agents'
+export * from './markets'
+
