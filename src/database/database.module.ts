@@ -12,7 +12,7 @@ import { User, Transaction, AgentTask } from './entities';
                 type: 'postgres',
                 url: config.get<string>('DATABASE_URL'),
                 entities: [User, Transaction, AgentTask],
-                synchronize: config.get<string>('NODE_ENV') !== 'production',
+                synchronize: config.get<string>('NODE_ENV') !== 'production' || config.get<string>('SYNC_DB') === 'true',
                 logging: config.get<string>('NODE_ENV') === 'development',
                 ssl: config.get<string>('NODE_ENV') === 'production' ? {
                     rejectUnauthorized: false,
