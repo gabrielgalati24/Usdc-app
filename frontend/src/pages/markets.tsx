@@ -170,7 +170,7 @@ export function MarketsPage() {
                                         }}
                                         itemStyle={{ color: '#fff' }}
                                         labelStyle={{ display: 'none' }}
-                                        formatter={(value: number) => [`$${value.toFixed(2)}`, 'Precio']}
+                                        formatter={(value: number | undefined) => [`$${value?.toFixed(2) ?? '0.00'}`, 'Precio']}
                                     />
                                     <Area
                                         type="monotone"

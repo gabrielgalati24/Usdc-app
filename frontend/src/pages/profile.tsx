@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores'
-import { Card, Button, Input } from '@/components/ui'
+import { Card, Button } from '@/components/ui'
 import { User, Mail, Wallet, Calendar, Copy, CheckCircle, Shield } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'

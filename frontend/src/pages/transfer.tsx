@@ -24,7 +24,7 @@ export function TransferPage() {
     const [success, setSuccess] = useState(false)
 
     const searchRef = useRef<HTMLDivElement>(null)
-    const debounceRef = useRef<NodeJS.Timeout | null>(null)
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Close search results when clicking outside
     useEffect(() => {

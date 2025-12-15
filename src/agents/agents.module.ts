@@ -14,9 +14,26 @@ import { WalletModule } from '../wallet/wallet.module';
         BullModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-                redis: config.get<string>('REDIS_URL') || 'redis://localhost:6379',
-            }),
+            useFactory: (config: ConfigService) => {
+                const redisUrl = config.get<string>('REDIS_URL') || 'redis://localhost:6379';
+                const useSSL = redisUrl.startsWith('rediss://');
+
+                if (useSSL) {
+                    // Parse the URL and add TLS configuration
+                    return {
+                        redis: {
+                            url: redisUrl,
+                            tls: {
+                                rejectUnauthorized: false,
+                            },
+                        },
+                    };
+                }
+
+                return {
+                    redis: redisUrl,
+                };
+            },
         }),
         BullModule.registerQueue({
             name: AGENT_QUEUE,
