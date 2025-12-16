@@ -142,9 +142,18 @@ export function TransferPage() {
 
                 {/* Balance */}
                 <div className="text-center mb-6">
-                    <p className="text-sm text-neutral-400">Disponible</p>
+                    <p className="text-sm text-neutral-400">Disponible para enviar</p>
                     <p className="text-2xl font-bold text-white">${balance} USDC</p>
                 </div>
+
+                {/* Insufficient balance warning */}
+                {amount && parseFloat(amount) > parseFloat(balance) && (
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                        <p className="text-sm text-red-500">
+                            Saldo insuficiente. Tienes ${balance} USDC pero intentas enviar ${amount} USDC.
+                        </p>
+                    </div>
+                )}
 
                 {/* Error */}
                 {error && (
@@ -241,19 +250,34 @@ export function TransferPage() {
                         )}
                     </div>
 
-                    <Input
-                        type="number"
-                        label="Monto (USDC)"
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => {
-                            setAmount(e.target.value)
-                            clearError()
-                        }}
-                        min="0.01"
-                        step="0.01"
-                        required
-                    />
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-medium text-neutral-200">
+                                Monto (USDC)
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setAmount(balance)}
+                                disabled={parseFloat(balance) <= 0}
+                                className="text-xs px-2 py-1 bg-orange-500/20 text-orange-500 rounded-md hover:bg-orange-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                MÁXIMO
+                            </button>
+                        </div>
+                        <Input
+                            type="number"
+                            placeholder="0.00"
+                            value={amount}
+                            onChange={(e) => {
+                                setAmount(e.target.value)
+                                clearError()
+                            }}
+                            min="0.01"
+                            step="0.01"
+                            max={parseFloat(balance)}
+                            required
+                        />
+                    </div>
 
                     <Input
                         label="Nota (opcional)"
@@ -267,7 +291,12 @@ export function TransferPage() {
                         className="w-full"
                         size="lg"
                         isLoading={isLoading}
-                        disabled={!selectedUser || !amount || parseFloat(amount) <= 0}
+                        disabled={
+                            !selectedUser ||
+                            !amount ||
+                            parseFloat(amount) <= 0 ||
+                            parseFloat(amount) > parseFloat(balance)
+                        }
                     >
                         Enviar ${amount || '0.00'} USDC
                     </Button>

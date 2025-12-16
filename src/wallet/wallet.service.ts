@@ -11,6 +11,9 @@ import { TransferDto, WithdrawDto, DepositDto } from './dto';
 
 @Injectable()
 export class WalletService {
+    private readonly GAS_RESERVE_USDC = 0.01;
+    private readonly MIN_WITHDRAW_AMOUNT = 0.01;
+
     constructor(
         @InjectRepository(User)
         private readonly userRepo: Repository<User>,
@@ -26,11 +29,49 @@ export class WalletService {
             throw new NotFoundException('Usuario no encontrado.');
         }
 
+        const totalBalance = parseFloat(user.usdcBalance);
+        const availableBalance = Math.max(0, totalBalance - this.GAS_RESERVE_USDC);
+
         return {
             userId: user.id,
             email: user.email,
             usdcBalance: user.usdcBalance,
+            totalBalance: totalBalance.toFixed(6),
+            availableBalance: availableBalance.toFixed(6),
+            gasReserve: this.GAS_RESERVE_USDC.toFixed(6),
             walletAddress: user.walletAddress,
+        };
+    }
+
+    /**
+     * Estima las comisiones para un retiro
+     */
+    async estimateWithdrawFee(userId: string, amount: number) {
+        const user = await this.userRepo.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new NotFoundException('Usuario no encontrado.');
+        }
+
+        const balance = parseFloat(user.usdcBalance);
+        const gasFee = this.GAS_RESERVE_USDC;
+        const totalRequired = amount + gasFee;
+        const maxWithdrawable = Math.max(0, balance - gasFee);
+        const isValid = balance >= totalRequired && amount >= this.MIN_WITHDRAW_AMOUNT;
+
+        return {
+            amount: amount.toFixed(6),
+            gasFee: gasFee.toFixed(6),
+            totalRequired: totalRequired.toFixed(6),
+            currentBalance: balance.toFixed(6),
+            maxWithdrawable: maxWithdrawable.toFixed(6),
+            remainingAfterWithdraw: isValid ? (balance - totalRequired).toFixed(6) : '0.000000',
+            isValid,
+            minAmount: this.MIN_WITHDRAW_AMOUNT.toFixed(6),
+            message: !isValid
+                ? balance < totalRequired
+                    ? `Saldo insuficiente. Necesitas ${totalRequired.toFixed(6)} USDC (${amount.toFixed(6)} + ${gasFee.toFixed(6)} de gas)`
+                    : `El monto mínimo de retiro es ${this.MIN_WITHDRAW_AMOUNT} USDC`
+                : null,
         };
     }
 
@@ -82,6 +123,23 @@ export class WalletService {
             throw new BadRequestException('No puedes transferir a ti mismo.');
         }
 
+        const fromUserCheck = await this.userRepo.findOne({ where: { id: fromUserId } });
+        if (!fromUserCheck) {
+            throw new NotFoundException('Usuario origen no encontrado.');
+        }
+
+        const toUserCheck = await this.userRepo.findOne({ where: { id: dto.toUserId } });
+        if (!toUserCheck) {
+            throw new NotFoundException('Usuario destino no encontrado.');
+        }
+
+        const currentBalance = parseFloat(fromUserCheck.usdcBalance);
+        if (currentBalance < dto.amount) {
+            throw new BadRequestException(
+                `Saldo insuficiente. Tienes ${currentBalance.toFixed(6)} USDC pero intentas enviar ${dto.amount.toFixed(6)} USDC.`
+            );
+        }
+
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -98,11 +156,8 @@ export class WalletService {
                 }),
             ]);
 
-            if (!fromUser) {
-                throw new NotFoundException('Usuario origen no encontrado.');
-            }
-            if (!toUser) {
-                throw new NotFoundException('Usuario destino no encontrado.');
+            if (!fromUser || !toUser) {
+                throw new NotFoundException('Usuario no encontrado.');
             }
 
             const fromBalance = parseFloat(fromUser.usdcBalance);
@@ -145,6 +200,40 @@ export class WalletService {
     }
 
     async withdraw(userId: string, dto: WithdrawDto) {
+        // ==========================================
+        // PASO 1: Validaciones ANTES de la transacción
+        // ==========================================
+
+        // Validar monto mínimo
+        if (dto.amount < this.MIN_WITHDRAW_AMOUNT) {
+            throw new BadRequestException(
+                `El monto mínimo de retiro es ${this.MIN_WITHDRAW_AMOUNT} USDC.`
+            );
+        }
+
+        // Obtener usuario y validar saldo
+        const userCheck = await this.userRepo.findOne({ where: { id: userId } });
+        if (!userCheck) {
+            throw new NotFoundException('Usuario no encontrado.');
+        }
+
+        const currentBalance = parseFloat(userCheck.usdcBalance);
+        const totalRequired = dto.amount + this.GAS_RESERVE_USDC;
+
+        if (currentBalance < totalRequired) {
+            throw new BadRequestException(
+                `Saldo insuficiente. Tienes ${currentBalance.toFixed(6)} USDC pero necesitas ${totalRequired.toFixed(6)} USDC (${dto.amount.toFixed(6)} + ${this.GAS_RESERVE_USDC.toFixed(6)} de comisión de gas).`
+            );
+        }
+
+        // Validar dirección de wallet
+        if (!dto.toAddress || !dto.toAddress.startsWith('0x') || dto.toAddress.length !== 42) {
+            throw new BadRequestException('Dirección de wallet inválida.');
+        }
+
+        // ==========================================
+        // PASO 2: Iniciar transacción DB (solo si pasó validaciones)
+        // ==========================================
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
@@ -160,9 +249,13 @@ export class WalletService {
             }
 
             const balance = parseFloat(user.usdcBalance);
-            if (balance < dto.amount) {
+            if (balance < totalRequired) {
                 throw new BadRequestException('Saldo insuficiente.');
             }
+
+            const newBalance = balance - totalRequired;
+            user.usdcBalance = newBalance.toFixed(6);
+            await queryRunner.manager.save(user);
 
             // Crear la transacción en estado pending
             const tx = queryRunner.manager.create(Transaction, {
@@ -171,16 +264,14 @@ export class WalletService {
                 amount: dto.amount.toFixed(6),
                 type: TransactionType.WITHDRAW,
                 status: TransactionStatus.PENDING,
+                notes: `Retiro on-chain. Gas: ${this.GAS_RESERVE_USDC} USDC`,
             });
             await queryRunner.manager.save(tx);
 
-            // Actualizar balance
-            user.usdcBalance = (balance - dto.amount).toFixed(6);
-            await queryRunner.manager.save(user);
-
             await queryRunner.commitTransaction();
 
-            // Enviar on-chain (fuera de la transacción DB)
+            // ==========================================
+            // ==========================================
             try {
                 const result = await this.usdcService.transferUsdc(
                     dto.toAddress,
@@ -196,7 +287,9 @@ export class WalletService {
                     success: true,
                     transactionId: tx.id,
                     txHash: result.hash,
-                    newBalance: user.usdcBalance,
+                    amount: dto.amount.toFixed(6),
+                    gasFee: this.GAS_RESERVE_USDC.toFixed(6),
+                    newBalance: newBalance.toFixed(6),
                 };
             } catch (cryptoError) {
                 // Revertir balance si falla el envío crypto
@@ -205,6 +298,7 @@ export class WalletService {
                 });
                 await this.txRepo.update(tx.id, {
                     status: TransactionStatus.FAILED,
+                    notes: `Error: ${cryptoError instanceof Error ? cryptoError.message : 'Unknown error'}`,
                 });
                 throw cryptoError;
             }

@@ -35,6 +35,17 @@ export class WalletController {
         return this.walletService.transfer(user.id, dto);
     }
 
+    @Get('withdraw/estimate')
+    @ApiOperation({ summary: 'Estimar comisión de retiro' })
+    @ApiQuery({ name: 'amount', required: true, description: 'Monto a retirar' })
+    @ApiResponse({ status: 200, description: 'Estimación de comisiones y validación' })
+    estimateWithdrawFee(
+        @CurrentUser() user: User,
+        @Query('amount') amount: string,
+    ) {
+        return this.walletService.estimateWithdrawFee(user.id, parseFloat(amount) || 0);
+    }
+
     @Post('withdraw')
     @ApiOperation({ summary: 'Retirar USDC a wallet externa (on-chain)' })
     @ApiResponse({ status: 201, description: 'Retiro procesado' })
