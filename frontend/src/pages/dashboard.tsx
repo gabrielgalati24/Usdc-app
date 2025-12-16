@@ -110,7 +110,7 @@ export function DashboardPage() {
                             <span className="text-sm text-neutral-400">
                                 Detección de depósitos
                             </span>
-                            <span className="text-sm text-green-500">~30 segundos</span>
+                            <span className="text-sm text-green-500">~5 minutos</span>
                         </div>
                     </div>
                 </Card>

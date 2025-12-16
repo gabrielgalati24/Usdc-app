@@ -19,9 +19,9 @@ export class DepositMonitorService {
     ) { }
 
     /**
-     * Revisa depósitos cada 30 segundos
+     * Revisa depósitos cada 5 minutos
      */
-    @Cron('*/5 * * * *')
+    @Cron(CronExpression.EVERY_5_MINUTES)
     async checkDeposits() {
         this.logger.log('🔍 Iniciando monitoreo de depósitos...');
 
