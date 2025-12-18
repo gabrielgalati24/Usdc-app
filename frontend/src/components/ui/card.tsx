@@ -6,15 +6,19 @@ interface CardProps {
   className?: string
   gradient?: boolean
   hover?: boolean
+  glow?: boolean
+  interactive?: boolean
 }
 
-export function Card({ children, className, gradient, hover }: CardProps) {
+export function Card({ children, className, gradient, hover, glow, interactive }: CardProps) {
   return (
     <div
       className={cn(
-        'bg-neutral-900 border border-neutral-800 rounded-2xl p-5',
+        'relative bg-neutral-900/80 border border-white/[0.06] rounded-2xl p-5 backdrop-blur-sm transition-all duration-300',
         gradient && 'gradient-card',
-        hover && 'hover:border-neutral-700 transition-colors duration-200',
+        hover && 'hover:border-white/10',
+        glow && 'glow-subtle',
+        interactive && 'card-interactive cursor-pointer',
         className
       )}
     >
@@ -43,7 +47,7 @@ interface CardTitleProps {
 
 export function CardTitle({ children, className }: CardTitleProps) {
   return (
-    <h3 className={cn('text-base font-medium text-neutral-300', className)}>
+    <h3 className={cn('text-base font-semibold text-neutral-200', className)}>
       {children}
     </h3>
   )

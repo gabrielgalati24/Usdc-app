@@ -9,31 +9,39 @@ interface StatsCardsProps {
 
 export function StatsCards({ incoming, outgoing }: StatsCardsProps) {
     return (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Incoming */}
-            <Card className="bg-neutral-900">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <ArrowDownLeft className="w-4 h-4 text-green-500" />
+            <Card className="group hover:border-green-500/30 transition-all duration-300" hover>
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <ArrowDownLeft className="w-5 h-5 text-green-400" />
                     </div>
-                    <span className="text-sm text-neutral-400">Entrada</span>
+                    <div>
+                        <span className="text-sm text-neutral-400">Entrada</span>
+                        <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Total recibido</p>
+                    </div>
                 </div>
-                <p className="text-xl font-bold text-white">
-                    ${formatCurrency(incoming)} USDc
+                <p className="text-2xl font-bold text-white">
+                    <span className="text-green-400">+</span>${formatCurrency(incoming)}
                 </p>
+                <p className="text-xs text-neutral-500 mt-1">USDC</p>
             </Card>
 
             {/* Outgoing */}
-            <Card className="bg-neutral-900">
-                <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                        <ArrowUpRight className="w-4 h-4 text-red-500" />
+            <Card className="group hover:border-red-500/30 transition-all duration-300" hover>
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500/20 to-red-500/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <ArrowUpRight className="w-5 h-5 text-red-400" />
                     </div>
-                    <span className="text-sm text-neutral-400">Salida</span>
+                    <div>
+                        <span className="text-sm text-neutral-400">Salida</span>
+                        <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Total enviado</p>
+                    </div>
                 </div>
-                <p className="text-xl font-bold text-white">
-                    ${formatCurrency(outgoing)} USDc
+                <p className="text-2xl font-bold text-white">
+                    <span className="text-red-400">-</span>${formatCurrency(outgoing)}
                 </p>
+                <p className="text-xs text-neutral-500 mt-1">USDC</p>
             </Card>
         </div>
     )

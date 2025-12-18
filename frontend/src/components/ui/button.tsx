@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive'
+    variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'glow'
     size?: 'sm' | 'md' | 'lg' | 'icon'
     isLoading?: boolean
 }
@@ -22,19 +22,20 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ) => {
         const variants = {
             default:
-                'bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700',
+                'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 active:from-orange-600 active:to-orange-700 shadow-lg shadow-orange-500/20',
             secondary:
-                'bg-neutral-800 text-white hover:bg-neutral-700 active:bg-neutral-600',
+                'bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:border-white/20 active:bg-white/5',
             outline:
-                'border border-neutral-700 bg-transparent text-white hover:bg-neutral-800',
-            ghost: 'bg-transparent text-white hover:bg-neutral-800',
-            destructive: 'bg-red-500 text-white hover:bg-red-600',
+                'border border-white/20 bg-transparent text-white hover:bg-white/5 hover:border-white/30',
+            ghost: 'bg-transparent text-white hover:bg-white/10',
+            destructive: 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-400 hover:to-red-500 shadow-lg shadow-red-500/20',
+            glow: 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 shadow-lg shadow-orange-500/30 animate-glow-pulse',
         }
 
         const sizes = {
-            sm: 'h-8 px-3 text-sm rounded-lg',
-            md: 'h-10 px-4 text-sm rounded-xl',
-            lg: 'h-12 px-6 text-base rounded-xl',
+            sm: 'h-8 px-3 text-xs rounded-lg gap-1.5',
+            md: 'h-10 px-4 text-sm rounded-xl gap-2',
+            lg: 'h-12 px-6 text-base rounded-xl gap-2',
             icon: 'h-10 w-10 rounded-xl',
         }
 
@@ -43,9 +44,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 disabled={disabled || isLoading}
                 className={cn(
-                    'inline-flex items-center justify-center gap-2 font-medium transition-all duration-200',
-                    'focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:ring-offset-2 focus:ring-offset-neutral-900',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    'inline-flex items-center justify-center font-medium transition-all duration-200 relative overflow-hidden',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900',
+                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none',
+                    'active:scale-[0.98]',
                     variants[variant],
                     sizes[size],
                     className
@@ -54,7 +56,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             >
                 {isLoading && (
                     <svg
-                        className="animate-spin h-4 w-4"
+                        className="animate-spin h-4 w-4 shrink-0"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
