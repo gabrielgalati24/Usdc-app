@@ -8,12 +8,18 @@ importers:
 
   .:
     dependencies:
+      '@google/generative-ai':
+        specifier: ^0.24.1
+        version: 0.24.1
       '@langchain/community':
         specifier: ^0.0.53
         version: 0.0.53(ioredis@5.8.2)(jsonwebtoken@9.0.3)(lodash@4.17.21)(openai@4.104.0(zod@3.25.76))(pg@8.16.3)(typeorm@0.3.28(ioredis@5.8.2)(pg@8.16.3)(ts-node@10.9.2(@types/node@20.19.23)(typescript@5.9.3)))
       '@langchain/core':
         specifier: ^0.1.61
         version: 0.1.63(openai@4.104.0(zod@3.25.76))
+      '@langchain/google-genai':
+        specifier: ^2.1.0
+        version: 2.1.0(@langchain/core@0.1.63(openai@4.104.0(zod@3.25.76)))
       '@langchain/openai':
         specifier: ^0.0.28
         version: 0.0.28
@@ -294,6 +300,10 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
+
+  '@google/generative-ai@0.24.1':
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
+    engines: {node: '>=18.0.0'}
 
   '@ioredis/commands@1.4.0':
     resolution: {integrity: sha512-aFT2yemJJo+TZCmieA7qnYGQooOS7QfNmYrzGtsYd3g9j5iDP8AimYYAesf79ohjbLG12XxC4nG5DyEnC88AsQ==}
@@ -684,6 +694,12 @@ packages:
   '@langchain/core@0.2.36':
     resolution: {integrity: sha512-qHLvScqERDeH7y2cLuJaSAlMwg3f/3Oc9nayRSXRU2UuaK/SOhI42cxiPLj1FnuHJSmN0rBQFkrLx02gI4mcVg==}
     engines: {node: '>=18'}
+
+  '@langchain/google-genai@2.1.0':
+    resolution: {integrity: sha512-CFbWLOp7GR8hy+obC35pbfnD8PSKIlhiJw+n1x4z26iGQjo1594B7j7yKhNgmUcqr8MsZLRY1T1H6FPvImjoYA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@langchain/core': 1.1.5
 
   '@langchain/openai@0.0.28':
     resolution: {integrity: sha512-2s1RA3/eAnz4ahdzsMPBna9hfAqpFNlWdHiPxVGZ5yrhXsbLWWoPcF+22LCk9t0HJKtazi2GCIWc0HVXH9Abig==}
@@ -3327,6 +3343,8 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
+  '@google/generative-ai@0.24.1': {}
+
   '@ioredis/commands@1.4.0': {}
 
   '@isaacs/cliui@8.0.2':
@@ -3586,6 +3604,12 @@ snapshots:
       zod-to-json-schema: 3.25.0(zod@3.25.76)
     transitivePeerDependencies:
       - openai
+
+  '@langchain/google-genai@2.1.0(@langchain/core@0.1.63(openai@4.104.0(zod@3.25.76)))':
+    dependencies:
+      '@google/generative-ai': 0.24.1
+      '@langchain/core': 0.1.63(openai@4.104.0(zod@3.25.76))
+      uuid: 11.1.0
 
   '@langchain/openai@0.0.28':
     dependencies:

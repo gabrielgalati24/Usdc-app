@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatOllama } from '@langchain/community/chat_models/ollama';
 import { ChatOpenAI } from '@langchain/openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Observable } from 'rxjs';
@@ -32,7 +33,21 @@ export interface AnalysisResult {
 @Injectable()
 export class MasterAgentService {
     private readonly logger = new Logger(MasterAgentService.name);
-    private readonly llm: BaseChatModel;
+    private readonly llm: BaseChatModel | null = null;
+    private geminiModel: any = null;
+    private useGemini: boolean = false;
+    private geminiKey: string | undefined;
+
+    // Model candidates in order of preference (most capable/cheapest first)
+    private readonly GEMINI_CANDIDATES = [
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-latest',
+        'gemini-1.0-pro',
+        'gemini-pro',
+        'gemini-2.0-flash-exp'
+    ];
+    private selectedGeminiModelName: string | null = null;
 
     constructor(
         private readonly config: ConfigService,
@@ -43,26 +58,92 @@ export class MasterAgentService {
         @InjectRepository(Transaction)
         private readonly transactionRepo: Repository<Transaction>,
     ) {
-        const ollamaUrl = this.config.get<string>('OLLAMA_BASE_URL');
+        const geminiKey = this.config.get<string>('GEMINI_API_KEY');
         const openaiKey = this.config.get<string>('OPENAI_API_KEY');
+        const ollamaUrl = this.config.get<string>('OLLAMA_BASE_URL');
 
-        if (openaiKey) {
+        if (geminiKey) {
+            this.logger.log('Inicializando Google Gemini (API directa)...');
+            this.geminiKey = geminiKey;
+            this.useGemini = true;
+            // Initialization happens lazily on first use or background
+            this.initializeGemini();
+        } else if (openaiKey) {
             this.logger.log('Usando OpenAI como LLM');
-            this.llm = new ChatOpenAI({
+            (this as any).llm = new ChatOpenAI({
                 openAIApiKey: openaiKey,
                 modelName: this.config.get<string>('OPENAI_MODEL') || 'gpt-4',
                 temperature: 0.1,
             });
         } else if (ollamaUrl) {
             this.logger.log('Usando Ollama como LLM');
-            this.llm = new ChatOllama({
+            (this as any).llm = new ChatOllama({
                 baseUrl: ollamaUrl,
                 model: this.config.get<string>('OLLAMA_MODEL') || 'llama3',
                 temperature: 0.1,
             });
         } else {
-            throw new Error('Debe configurar OLLAMA_BASE_URL o OPENAI_API_KEY');
+            throw new Error('Debe configurar GEMINI_API_KEY, OPENAI_API_KEY o OLLAMA_BASE_URL');
         }
+    }
+
+    private async initializeGemini() {
+        if (!this.geminiKey) return;
+
+        const configuredModel = this.config.get<string>('GEMINI_MODEL');
+        const candidates = configuredModel ? [configuredModel, ...this.GEMINI_CANDIDATES] : this.GEMINI_CANDIDATES;
+
+        const genAI = new GoogleGenerativeAI(this.geminiKey);
+
+        for (const modelName of candidates) {
+            try {
+                this.logger.log(`Probando modelo Gemini: ${modelName}...`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                // Test call
+                await model.generateContent('Hi');
+
+                this.geminiModel = model;
+                this.selectedGeminiModelName = modelName;
+                this.logger.log(`✅ Modelo Gemini seleccionado y funcionando: ${modelName}`);
+                return;
+            } catch (error: any) {
+                this.logger.warn(`❌ Falló modelo ${modelName}: ${error.message || JSON.stringify(error)}`);
+                // Continue to next candidate
+            }
+        }
+
+        this.logger.error('❌ Ningún modelo Gemini funcionó. Verifica tu API Key y región.');
+    }
+
+    private async getWorkingModel() {
+        if (this.geminiModel) return this.geminiModel;
+
+        // If not initialized yet (race condition), wait a bit
+        if (this.useGemini && !this.geminiModel) {
+            this.logger.log('Esperando inicialización de Gemini...');
+            // Simple wait logic
+            for (let i = 0; i < 5; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                if (this.geminiModel) return this.geminiModel;
+            }
+            throw new Error('Gemini no se pudo inicializar correctamente (ningún modelo disponible)');
+        }
+        return null;
+    }
+
+    private async invokeModel(prompt: string): Promise<string> {
+        if (this.useGemini) {
+            const model = await this.getWorkingModel();
+            if (!model) throw new Error('Gemini no disponible');
+
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            return response.text();
+        } else if (this.llm) {
+            const response = await this.llm.invoke([new HumanMessage(prompt)]);
+            return response.content.toString();
+        }
+        throw new Error('No hay modelo LLM configurado');
     }
 
     async createTask(userId: string, request: AnalysisRequest): Promise<AgentTask> {
@@ -118,13 +199,9 @@ export class MasterAgentService {
     private async delegateToSlave(task: AgentTask): Promise<Record<string, unknown>> {
         const systemPrompt = this.getSystemPrompt(task.taskType);
         const userPrompt = JSON.stringify(task.input, null, 2);
+        const combinedPrompt = `${systemPrompt}\n\nInput JSON:\n${userPrompt}`;
 
-        const response = await this.llm.invoke([
-            new SystemMessage(systemPrompt),
-            new HumanMessage(userPrompt),
-        ]);
-
-        const content = response.content.toString();
+        const content = await this.invokeModel(combinedPrompt);
 
         try {
             return JSON.parse(content);
@@ -199,13 +276,11 @@ Analiza los datos proporcionados y responde en formato JSON con:
     }
 
     async chat(userId: string, message: string): Promise<{ response: string; context?: Record<string, unknown> }> {
-        // Fetch user data for context
         const user = await this.userRepo.findOne({ where: { id: userId } });
         if (!user) {
             throw new Error('Usuario no encontrado');
         }
 
-        // Fetch recent transactions (where user is sender OR receiver)
         const transactions = await this.transactionRepo
             .createQueryBuilder('tx')
             .where('tx.fromUserId = :userId', { userId })
@@ -214,7 +289,6 @@ Analiza los datos proporcionados y responde en formato JSON con:
             .take(10)
             .getMany();
 
-        // Calculate stats
         let totalDeposits = 0;
         let totalWithdrawals = 0;
         let totalTransfers = 0;
@@ -239,7 +313,7 @@ Analiza los datos proporcionados y responde en formato JSON con:
             totalTransfers,
         };
 
-        const systemPrompt = `Eres un asistente financiero experto en criptomonedas para una wallet de USDC en la red Polygon.
+        const prompt = `Eres un asistente financiero experto en criptomonedas para una wallet de USDC en la red Polygon.
         
 El usuario tiene la siguiente información:
 - Balance actual: ${user.usdcBalance} USDC
@@ -252,18 +326,13 @@ El usuario tiene la siguiente información:
 Responde de forma concisa, amigable y profesional en español.
 Si te preguntan sobre balance, inversiones, estrategias o análisis financiero, proporciona consejos útiles basados en la información del usuario.
 Si no tienes suficiente información, pregunta amablemente por más detalles.
-Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
+Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.
+
+Usuario: ${message}`;
 
         try {
-            const response = await this.llm.invoke([
-                new SystemMessage(systemPrompt),
-                new HumanMessage(message),
-            ]);
-
-            return {
-                response: response.content.toString(),
-                context,
-            };
+            const response = await this.invokeModel(prompt);
+            return { response, context };
         } catch (error) {
             this.logger.error('Error en chat:', error);
             return {
@@ -277,15 +346,13 @@ Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
         return new Observable((observer) => {
             (async () => {
                 try {
-                    // Fetch user data for context
                     const user = await this.userRepo.findOne({ where: { id: userId } });
                     if (!user) {
-                        observer.next({ data: JSON.stringify({ error: 'Usuario no encontrado' }) } as MessageEvent);
+                        observer.next({ data: { error: 'Usuario no encontrado' } });
                         observer.complete();
                         return;
                     }
 
-                    // Fetch recent transactions
                     const transactions = await this.transactionRepo
                         .createQueryBuilder('tx')
                         .where('tx.fromUserId = :userId', { userId })
@@ -294,7 +361,6 @@ Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
                         .take(10)
                         .getMany();
 
-                    // Calculate stats
                     let totalDeposits = 0;
                     let totalWithdrawals = 0;
                     let totalTransfers = 0;
@@ -310,7 +376,7 @@ Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
                         }
                     });
 
-                    const systemPrompt = `Eres un asistente financiero experto en criptomonedas para una wallet de USDC en la red Polygon.
+                    const prompt = `Eres un asistente financiero experto en criptomonedas para una wallet de USDC en la red Polygon.
         
 El usuario tiene la siguiente información:
 - Balance actual: ${user.usdcBalance} USDC
@@ -323,22 +389,35 @@ El usuario tiene la siguiente información:
 Responde de forma concisa, amigable y profesional en español.
 Si te preguntan sobre balance, inversiones, estrategias o análisis financiero, proporciona consejos útiles basados en la información del usuario.
 Si no tienes suficiente información, pregunta amablemente por más detalles.
-Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
+Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.
 
-                    // Stream the response
-                    const stream = await this.llm.stream([
-                        new SystemMessage(systemPrompt),
-                        new HumanMessage(message),
-                    ]);
+Usuario: ${message}`;
 
-                    for await (const chunk of stream) {
-                        const content = chunk.content.toString();
-                        if (content) {
-                            observer.next({ data: { content } });
+                    // Usar streaming nativo de Gemini si está disponible
+                    if (this.useGemini) {
+                        const model = await this.getWorkingModel();
+                        if (model) {
+                            const result = await model.generateContentStream(prompt);
+
+                            for await (const chunk of result.stream) {
+                                const text = chunk.text();
+                                if (text) {
+                                    observer.next({ data: { content: text } });
+                                }
+                            }
+                        } else {
+                            throw new Error('Gemini no inicializado');
+                        }
+                    } else {
+                        // Fallback para otros modelos
+                        const fullContent = await this.invokeModel(prompt);
+                        const words = fullContent.split(' ');
+                        for (const word of words) {
+                            observer.next({ data: { content: word + ' ' } });
+                            await new Promise(resolve => setTimeout(resolve, 50));
                         }
                     }
 
-                    // Send completion signal
                     observer.next({ data: { done: true } });
                     observer.complete();
 
@@ -347,7 +426,7 @@ Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
                     observer.next({
                         data: {
                             error: 'Error al procesar el mensaje',
-                            content: 'Lo siento, hubo un error. Por favor, intenta de nuevo.'
+                            content: 'Lo siento, no pude conectar con Gemini. Verifica los logs del servidor para ver qué modelos fallaron.'
                         }
                     });
                     observer.complete();
@@ -356,4 +435,3 @@ Siempre recuerda que trabajamos con USDC (stablecoin) en la red Polygon.`;
         });
     }
 }
-
